@@ -760,14 +760,18 @@ object QueueSpec extends ZIOBaseSpec {
     test("many to many") {
       check(smallInt, Gen.listOf(smallInt)) { (n, as) =>
         for {
+          _        <- ZIO.debug(s"many to many with capacity $n and elements ${as.size}")
           queue    <- Queue.bounded[Int](n)
           offerors <- ZIO.foreach(as)(a => queue.offer(a).fork)
           takers   <- ZIO.foreach(as)(_ => queue.take.fork)
-          _        <- ZIO.foreach(offerors)(_.join)
-          _        <- ZIO.foreach(takers)(_.join)
+          _ <- ZIO.debug("start waiting")
+          _        <- Fiber.joinAll(offerors)
+          _ <- ZIO.debug("wait offerrors done")
+          _        <- Fiber.joinAll(takers)
+          _ <- ZIO.debug("wait takers done")
         } yield assertCompletes
       }
-    },
+    } @@ jvm(nonFlaky),
     test("isEmpty") {
       for {
         queue <- Queue.bounded[Int](2)
